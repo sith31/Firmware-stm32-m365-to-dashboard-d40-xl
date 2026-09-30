@@ -1,10 +1,11 @@
 name: C/C++ CI
 
 on:
-  push:
-    branches: [ v0.5 ]
+ push:
+    branches: [ main, v0.5 ]    # ← Añade 'main'
   pull_request:
-    branches: [ v0.5 ]
+    branches: [ main, v0.5 ]
+  workflow_dispatch:            # ← Para lanzar manual desde web
 
 jobs:
   build:
