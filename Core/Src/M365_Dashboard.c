@@ -512,24 +512,7 @@ void process_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, uint8_t *mess
 			HAL_HalfDuplex_EnableTransmitter(&huart3);
 			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
 			}
-			break;
-
-		case 0x07: { // KERS level
-			if (length >= 8) {
-				// message[7] = kers level (0=off, 1=med, 2=strong)
-				// MP->regen_current would be adjusted
-			}
-			ui8_tx_buffer[msglength] = 2;
-			ui8_tx_buffer[receiver] = message[receiver] + 3;
-			ui8_tx_buffer[command] = 0x07;
-			ui8_tx_buffer[startAddress] = 0;
-			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
-			HAL_HalfDuplex_EnableTransmitter(&huart3);
-			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
-			}
-			break;
-
-		default: {
+			default: {
 		//	MS->i_q_setpoint = 0; // stop motor for safety reason
 			}
 			break;
