@@ -9,6 +9,7 @@
 #include "main.h"
 #include "config.h"
 #include "print.h"
+#include "button_processing.h"
 #include <string.h>
 
 static uint8_t ui8_rx_buffer[128];
@@ -310,10 +311,5 @@ void send_CecotecTelemetry(MotorState_t *MS, MotorParams_t *MP, UART_HandleTypeD
 	ui8_tx_buffer[14] = calculate_Cecotec_XOR(ui8_tx_buffer, CECOTEC_FRAME_LEN);
 
 	// Transmit telemetry frame to display
-	HAL_UART_Transmit_DMA(&huart, ui8_tx_buffer, CECOTEC_FRAME_LEN);
-}
-	ui8_tx_buffer[CECOTEC_FRAME_LEN - 1] = crc;
-
-	// Transmit telemetry frame (full duplex - no half-duplex enable needed)
 	HAL_UART_Transmit_DMA(&huart, ui8_tx_buffer, CECOTEC_FRAME_LEN);
 }
