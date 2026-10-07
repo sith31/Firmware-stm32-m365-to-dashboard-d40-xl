@@ -29,11 +29,8 @@
 #include "eeprom.h"
 #include "button_processing.h"
 
-#if (DISPLAY_TYPE == DISPLAY_TYPE_M365DASHBOARD)
-#include "M365_Dashboard.h"
-#elif (DISPLAY_TYPE == DISPLAY_TYPE_CECOTEC)
 #include "Cecotec_Dashboard.h"
-#endif
+#include "M365_Dashboard.h"
 
 #include <stdlib.h>
 #include <arm_math.h>
@@ -502,9 +499,11 @@ int main(void) {
 	M365Dashboard_init(huart1);
 	PWR_init();
 #elif (DISPLAY_TYPE == DISPLAY_TYPE_CECOTEC)
-	CecotecDashboard_init(huart1);
-	PWR_init();
-#endif
+ 	CecotecDashboard_init(huart1);
+ 	// M365/ESP32 Bridge on USART3 (Half-Duplex)
+ 	M365Dashboard_init();
+ 	PWR_init();
+ #endif
 
 	TIM1->CCR1 = 1023; //set initial PWM values
 	TIM1->CCR2 = 1023;
@@ -600,9 +599,11 @@ int main(void) {
 		search_DashboardMessage(&MS, &MP, huart1);
 		checkButton(&MP, &MS);
 #elif (DISPLAY_TYPE == DISPLAY_TYPE_CECOTEC)
-		search_CecotecMessage(&MS, &MP, huart1);
-		checkButton(&MP, &MS);
-#endif
+ 		search_CecotecMessage(&MS, &MP, huart1);
+ 		// M365/ESP32 Bridge on USART3 (Half-Duplex)
+ 		search_DashboardMessage(&MS, &MP, huart3);
+ 		checkButton(&MP, &MS);
+ #endif
 
 #if (defined(FAST_LOOP_LOG))
 		if(ui8_UART_TxCplt_flag&&ui8_debug_state==3){
@@ -863,13 +864,20 @@ int main(void) {
 			HAL_GPIO_WritePin(BrakeLight_GPIO_Port, BrakeLight_Pin, GPIO_PIN_RESET);
 
 #if (DISPLAY_TYPE == DISPLAY_TYPE_CECOTEC)
-			// Telemetry feedback towards Cecotec display (~8 Hz)
-			static uint8_t ui8_cecotec_telem_div = 0;
-			if (++ui8_cecotec_telem_div >= 2) {
-				ui8_cecotec_telem_div = 0;
-				send_CecotecTelemetry(&MS, &MP, huart1);
-			}
-#endif
+ 			// Telemetry feedback towards Cecotec display (~8 Hz)
+ 			static uint8_t ui8_cecotec_telem_div = 0;
+ 			if (++ui8_cecotec_telem_div >= 2) {
+ 				ui8_cecotec_telem_div = 0;
+ 				send_CecotecTelemetry(&MS, &MP, huart1);
+ 			}
+
+ 			// M365/ESP32 Bridge telemetry on USART3 (~8 Hz, half-duplex)
+ 			static uint8_t ui8_m365_telem_div = 0;
+ 			if (++ui8_m365_telem_div >= 2) {
+ 				ui8_m365_telem_div = 0;
+ 				send_DashboardMessage(0, &MS, &MP); // Page 0 = real-time telemetry
+ 			}
+ #endif
 
 
 
@@ -1278,25 +1286,27 @@ static void MX_USART1_UART_Init(void) {
 }
 
 /**
- * @brief USART3 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief USART3 Initialization Function - M365 Half-Duplex for ESP32 Bridge
+  * @param None
+  * @retval None
+  */
 static void MX_USART3_UART_Init(void) {
 
 	huart3.Instance = USART3;
 
-	huart3.Init.BaudRate = 115200;
-
+	huart3.Init.BaudRate = M365_BAUDRATE;
 	huart3.Init.WordLength = UART_WORDLENGTH_8B;
 	huart3.Init.StopBits = UART_STOPBITS_1;
 	huart3.Init.Parity = UART_PARITY_NONE;
 	huart3.Init.Mode = UART_MODE_TX_RX;
 	huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
 	huart3.Init.OverSampling = UART_OVERSAMPLING_16;
-	if (HAL_UART_Init(&huart3) != HAL_OK) {
-		_Error_Handler(__FILE__, __LINE__);
+	if (HAL_HalfDuplex_Init(&huart3) != HAL_OK) {
+		Error_Handler();
 	}
+	
+	// Enable receiver by default
+	HAL_HalfDuplex_EnableReceiver(&huart3);
 }
 
 /**

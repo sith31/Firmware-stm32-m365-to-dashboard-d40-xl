@@ -3,8 +3,8 @@
  *
  *  Created on: Nov 27, 2021
  *      Author: stancecoke
+ *  Modified for ESP32 Bridge on USART3 (Half-Duplex)
  */
-
 
 #include "main.h"
 #include "config.h"
@@ -16,7 +16,8 @@
 #include "stm32f1xx_hal_flash.h"
 enum { STATE_LOST, STATE_START_DETECTED, STATE_LENGTH_DETECTED };
 
-UART_HandleTypeDef huart3;
+// Use USART3 for M365/ESP32 Bridge (Half-Duplex)
+extern UART_HandleTypeDef huart3;
 static uint8_t ui8_rx_buffer[132];
 static uint8_t ui8_dashboardmessage[132];
 static uint8_t enc[128];
@@ -68,9 +69,9 @@ enum bytesOfGeneralMessage {
 } gen_msg;
 
 
-void M365Dashboard_init(UART_HandleTypeDef huart1) {
-//        CLEAR_BIT(huart3.Instance->CR3, USART_CR3_EIE);
-	if (HAL_UART_Receive_DMA(&huart1, (uint8_t*) ui8_rx_buffer, sizeof(ui8_rx_buffer)) != HAL_OK) {
+void M365Dashboard_init() {
+	//        CLEAR_BIT(huart3.Instance->CR3, USART_CR3_EIE);
+	if (HAL_UART_Receive_DMA(&huart3, (uint8_t*) ui8_rx_buffer, sizeof(ui8_rx_buffer)) != HAL_OK) {
 		Error_Handler();
 	}
 	ui8_tx_buffer[0] = 0x55;
@@ -85,10 +86,10 @@ void M365Dashboard_init(UART_HandleTypeDef huart1) {
 	if(*IDp!=*IDs){
 		HAL_FLASH_Unlock();
 
-					uint32_t PAGEError = 0;
-					/*Variable used for Erase procedure*/
-					static FLASH_EraseInitTypeDef EraseInitStruct;
-					 /* Erase the user Flash area
+				uint32_t PAGEError = 0;
+				/*Variable used for Erase procedure*/
+				static FLASH_EraseInitTypeDef EraseInitStruct;
+				 /* Erase the user Flash area
 					    (area defined by FLASH_USER_START_ADDR and FLASH_USER_END_ADDR) ***********/
 					  //write sysinfo
 					  EraseInitStruct.TypeErase   = FLASH_TYPEERASE_PAGES;
@@ -98,6 +99,8 @@ void M365Dashboard_init(UART_HandleTypeDef huart1) {
 					  if (HAL_FLASHEx_Erase(&EraseInitStruct, &PAGEError) != HAL_OK)
 					  {
 					    /*
+
+(Showing lines 71-100 of 494. Use offset=101 to continue.)
 					      Error occurred while page erase.
 					      User can add here some code to deal with this error.
 					      PAGEError will contain the faulty page and then to know the code error on this page,
@@ -135,7 +138,7 @@ void M365Dashboard_init(UART_HandleTypeDef huart1) {
 
 }
 
-void search_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, UART_HandleTypeDef huart1){
+void search_DashboardMessage(MotorState_t *MS, MotorParams_t *MP) {
 
 	if(ui32_timeoutcounter>3200&&MT.ESC_status_2 != 0x0802){
 
@@ -148,14 +151,14 @@ void search_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, UART_HandleTyp
 	  	DMA1_Channel5->CNDTR=sizeof(ui8_rx_buffer);
 	  	SET_BIT(DMA1_Channel5->CCR, DMA_CCR_EN);
 
-		if (HAL_UART_Receive_DMA(&huart1, (uint8_t*) ui8_rx_buffer, sizeof(ui8_rx_buffer)) != HAL_OK) {
+		if (HAL_UART_Receive_DMA(&huart3, (uint8_t*) ui8_rx_buffer, sizeof(ui8_rx_buffer)) != HAL_OK) {
 			Error_Handler();
 		}
 
 	}
 
 
-	ui8_recentpointerposition = sizeof(ui8_rx_buffer) - (DMA1_Channel5->CNDTR); //Pointer of UART1RX DMA Channel
+	ui8_recentpointerposition = sizeof(ui8_rx_buffer) - (DMA1_Channel5->CNDTR); //Pointer of UART3RX DMA Channel
 		if (ui8_recentpointerposition<ui8_oldpointerposition){
 			ui8_oldpointerposition=ui8_recentpointerposition-1;
 			ui8_state=STATE_LOST;
@@ -183,7 +186,7 @@ void search_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, UART_HandleTyp
 			case STATE_LENGTH_DETECTED: { //read whole message and call processing
 				if(ui8_oldpointerposition==ui8_messagestartpos+ui8_messagelength-1){
 					memcpy(ui8_dashboardmessage,ui8_rx_buffer+ui8_messagestartpos,ui8_messagelength);
-					process_DashboardMessage( MS,  MP, (uint8_t*)&ui8_dashboardmessage,ui8_messagelength,huart1);
+					process_DashboardMessage( MS,  MP, (uint8_t*)&ui8_dashboardmessage,ui8_messagelength);
 					ui8_state=STATE_LOST;
 				  	   CLEAR_BIT(DMA1_Channel5->CCR, DMA_CCR_EN);
 				  	   DMA1_Channel5->CNDTR=sizeof(ui8_rx_buffer);
@@ -201,7 +204,7 @@ void search_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, UART_HandleTyp
 		ui32_timeoutcounter++;
 }
 
-void process_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, uint8_t *message, uint8_t length, UART_HandleTypeDef huart1 ){
+void process_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, uint8_t *message, uint8_t length ){
 	//while(HAL_UART_GetState(&huart1)!=HAL_UART_STATE_READY){}
 	//HAL_Delay(2); // bad style, but wait for characters coming in, if message is longer than expected
 	if(!checkCRC(message, length)){
@@ -225,8 +228,8 @@ void process_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, uint8_t *mess
 			ui8_tx_buffer[errorcode]=MS->error_state;
 
 			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
-			HAL_HalfDuplex_EnableTransmitter(&huart1);
-			HAL_UART_Transmit_DMA(&huart1, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
+			HAL_HalfDuplex_EnableTransmitter(&huart3);
+			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
 			if(MS->beep&&ui8_tx_buffer[Beep])MS->beep = 0;
 
 			}
@@ -280,8 +283,8 @@ void process_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, uint8_t *mess
 			ui8_target_offset = 6;
 			memcpy(target+ui8_target_offset,source+ui8_source_offset*2,message[payloadLength]);
 			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
-			HAL_HalfDuplex_EnableTransmitter(&huart1);
-			HAL_UART_Transmit_DMA(&huart1, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
+			HAL_HalfDuplex_EnableTransmitter(&huart3);
+			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
 			}
 			break;
 
@@ -418,8 +421,8 @@ void process_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, uint8_t *mess
 			ui8_tx_buffer[command]=0x07;
 			ui8_tx_buffer[startAddress] =0;
 			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
-			HAL_HalfDuplex_EnableTransmitter(&huart1);
-			HAL_UART_Transmit_DMA(&huart1, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
+			HAL_HalfDuplex_EnableTransmitter(&huart3);
+			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
 			}
 			break;
 
@@ -448,8 +451,8 @@ void process_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, uint8_t *mess
 			ui8_tx_buffer[command]=0x08;
 			ui8_tx_buffer[startAddress] =0;
 			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
-			HAL_HalfDuplex_EnableTransmitter(&huart1);
-			HAL_UART_Transmit_DMA(&huart1, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
+			HAL_HalfDuplex_EnableTransmitter(&huart3);
+			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
 			}
 			break;
 
@@ -461,8 +464,68 @@ void process_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, uint8_t *mess
 			ui8_tx_buffer[command]=0x09;
 			ui8_tx_buffer[startAddress] =0;
 			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
-			HAL_HalfDuplex_EnableTransmitter(&huart1);
-			HAL_UART_Transmit_DMA(&huart1, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
+			HAL_HalfDuplex_EnableTransmitter(&huart3);
+			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength]+6);
+			}
+			break;
+
+		// ESP32 Bridge Commands
+		case 0x01: { // Lock / Parking
+			MS->parking_locked = true;
+			MS->i_q_setpoint_temp = 0;
+			MS->brake_active = true;
+			// Send ACK
+			ui8_tx_buffer[msglength] = 2;
+			ui8_tx_buffer[receiver] = message[receiver] + 3;
+			ui8_tx_buffer[command] = 0x01;
+			ui8_tx_buffer[startAddress] = 0;
+			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
+			HAL_HalfDuplex_EnableTransmitter(&huart3);
+			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
+			}
+			break;
+
+		case 0x02: { // Unlock
+			MS->parking_locked = false;
+			// Send ACK
+			ui8_tx_buffer[msglength] = 2;
+			ui8_tx_buffer[receiver] = message[receiver] + 3;
+			ui8_tx_buffer[command] = 0x02;
+			ui8_tx_buffer[startAddress] = 0;
+			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
+			HAL_HalfDuplex_EnableTransmitter(&huart3);
+			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
+			}
+			break;
+
+		case 0x06: { // Rain mode
+			if (length >= 8) {
+				// message[7] = param (0=off, 1=on)
+				// This would need a rain_mode flag in MotorState_t
+				// For now just ACK
+			}
+			ui8_tx_buffer[msglength] = 2;
+			ui8_tx_buffer[receiver] = message[receiver] + 3;
+			ui8_tx_buffer[command] = 0x06;
+			ui8_tx_buffer[startAddress] = 0;
+			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
+			HAL_HalfDuplex_EnableTransmitter(&huart3);
+			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
+			}
+			break;
+
+		case 0x07: { // KERS level
+			if (length >= 8) {
+				// message[7] = kers level (0=off, 1=med, 2=strong)
+				// MP->regen_current would be adjusted
+			}
+			ui8_tx_buffer[msglength] = 2;
+			ui8_tx_buffer[receiver] = message[receiver] + 3;
+			ui8_tx_buffer[command] = 0x07;
+			ui8_tx_buffer[startAddress] = 0;
+			addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
+			HAL_HalfDuplex_EnableTransmitter(&huart3);
+			HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[msglength] + 6);
 			}
 			break;
 
