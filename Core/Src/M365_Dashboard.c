@@ -523,6 +523,28 @@ void process_DashboardMessage(MotorState_t *MS, MotorParams_t *MP, uint8_t *mess
 
 }
 
+void send_DashboardMessage(uint8_t page, MotorState_t *MS, MotorParams_t *MP) {
+	// Proactive telemetry send (same as 0x64 response)
+	ui8_tx_buffer[0] = 0x55;
+	ui8_tx_buffer[1] = 0xAA;
+	ui8_tx_buffer[5] = 0x00;
+	ui8_tx_buffer[2] = 0x08;  // msglength
+	ui8_tx_buffer[3] = 0x21;  // receiver
+	ui8_tx_buffer[4] = 0x64;  // command 0x64 = telemetry
+
+	ui8_tx_buffer[10] = MS->Speed;  // Speed
+	ui8_tx_buffer[6] = MS->mode;    // Mode
+	ui8_tx_buffer[7] = map(MS->Voltage, BATTERYVOLTAGE_MIN, BATTERYVOLTAGE_MAX, 0, 96);  // SOC
+	if(MS->light) ui8_tx_buffer[8] = 64;
+	else ui8_tx_buffer[8] = 0;      // Light
+	ui8_tx_buffer[9] = MS->beep;    // Beep
+	ui8_tx_buffer[11] = MS->error_state;  // Error code
+
+	addCRC((uint8_t*)ui8_tx_buffer, ui8_tx_buffer[2]+6);
+	HAL_HalfDuplex_EnableTransmitter(&huart3);
+	HAL_UART_Transmit_DMA(&huart3, (uint8_t*)ui8_tx_buffer, ui8_tx_buffer[2]+6);
+}
+
 void addCRC(uint8_t * message, uint8_t size){
     unsigned long cksm = 0;
     for(int i = 2; i < size - 2; i++) cksm += message[i];
