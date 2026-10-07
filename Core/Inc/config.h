@@ -27,11 +27,19 @@
 // choose your display here
 #define DISPLAY_TYPE DISPLAY_TYPE_CECOTEC
 
-// Cecotec Bongo D40 calibration settings
+// USART1 - Cecotec Display (Full Duplex 19200)
 #define CECOTEC_BAUDRATE 19200
 #define CECOTEC_THROTTLE_MIN 685   // Raw mV in resting position (~0.685V)
 #define CECOTEC_THROTTLE_MAX 2870  // Raw mV at 100% throttle (~2.870V)
 #define CECOTEC_THROTTLE_DEADBAND 40 // Deadband threshold above min
+
+// USART3 - M365/ESP32 Bridge (Half Duplex 115200)
+#define M365_BAUDRATE 115200
+#define M365_UART USART3
+#define M365_UART_TX_PIN GPIO_PIN_10  // PB10 - Pin 22
+#define M365_UART_RX_PIN GPIO_PIN_11  // PB11 - Pin 21
+#define M365_UART_GPIO_PORT GPIOB
+#define M365_UART_AF GPIO_AF7_USART3
 
 // Safety: Kick-to-start minimum speed in km/h (set 0 to disable)
 #define KICK_TO_START_KMH 3
