@@ -596,13 +596,13 @@ int main(void) {
 
 		//display message processing
 #if (DISPLAY_TYPE == DISPLAY_TYPE_M365DASHBOARD)
-		search_DashboardMessage(&MS, &MP, huart1);
+		search_DashboardMessage(&MS, &MP);
 		checkButton(&MP, &MS);
 #elif (DISPLAY_TYPE == DISPLAY_TYPE_CECOTEC)
- 		search_CecotecMessage(&MS, &MP, huart1);
- 		// M365/ESP32 Bridge on USART3 (Half-Duplex)
- 		search_DashboardMessage(&MS, &MP, huart3);
- 		checkButton(&MP, &MS);
+  		search_CecotecMessage(&MS, &MP, huart1);
+  		// M365/ESP32 Bridge on USART3 (Half-Duplex)
+  		search_DashboardMessage(&MS, &MP);
+		checkButton(&MP, &MS);
  #endif
 
 #if (defined(FAST_LOOP_LOG))
